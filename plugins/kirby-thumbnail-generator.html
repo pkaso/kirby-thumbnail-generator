@@ -1,0 +1,175 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Kirby Thumbnail Generator</title>
+
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+  </head>
+
+  <body class="pt-5">
+
+    <div class="fixed-top p-3 shadow-lg bg-white">
+      <ul class="nav nav-pills nav-fill align-items-center">
+        <li class="nav-item">
+          <button type="button" class="btn start btn-primary">Regenerate</button>
+          <button type="button" class="btn stop btn-outline-danger" disabled>Stop</button>
+        </li>
+        <li class="nav-item">
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+        </li>
+        <li class="nav-item counter">
+          0 / 0
+        </li>
+      </ul>
+    </div>
+
+    <div class="p-5 ">
+      <table class="table mt-5 mb-5">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Filename</th>
+            <th scope="col">Size</th>
+            <th scope="col">Status</th>
+            <th scope="col">Thubmnail Size</th>
+          </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+      </table>
+    </div>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js" type="text/javascript"></script>
+  <script>
+
+    $(function() {
+
+      var baseUrl = '';
+      var imagesList = [];
+      var canContinue = true;
+
+      $.getJSON('/api/thumbnails/list', function(response){
+        imagesList = response;
+        var tbody = $('.table tbody');
+        for(var i=0; i<imagesList.length; i++) {
+          var tr = $('<tr id="line'+i+'"></tr>');
+          tr.append('<td>'+i+'</td>');
+          tr.append('<td>/'+imagesList[i].path+'</td>');
+          tr.append('<td><span class="badge badge-secondary p-1">'+imagesList[i].size+'</span></td>');
+          tr.append('<td class="status"></td>');
+          tr.append('<td class="size"></td>');
+          tbody.append(tr);
+
+          $('.counter').html('0 / ' + (imagesList.length));
+
+        }
+      }).fail(function() {
+        console.error('Something happend :(');
+      });
+
+      $('.start').on('click', function() {
+        $('.progress-bar').removeClass('bg-success');
+        $('.progress-bar').removeClass('bg-danger');
+        $('.progress-bar').css('width', 0);
+        $('.counter').html('0 / ' + (imagesList.length));
+
+        $('.stop').removeAttr('disabled');
+        $('.start').attr('disabled', 'disabled');
+        $('.status, .size').html('');
+        canContinue = true;
+
+        generateThumbnail(0);
+        return false;
+      });
+
+      $('.stop').on('click', function() {
+        canContinue = false;
+        return false;
+      });
+
+      function generateThumbnail(index) {
+
+        if (canContinue == false) {
+          finishGeneration(false);
+          return false;
+        }
+
+        if (index >= imagesList.length) {
+          finishGeneration(true);
+          return false;
+        }
+
+        var image = imagesList[index];
+        var path = window.btoa(image.path);
+
+        var status = $('#line'+index+' .status');
+        var size = $('#line'+index+' .size');
+        status.html('');
+        size.html('');
+
+        status.append('<span class="badge badge-secondary">Loading...</span>');
+
+        $.getJSON('/api/thumbnails/generate/'+path, function(response)
+        {
+          if (typeof response.status != 'undefined') {
+            switch(response.status) {
+              case 'skip':
+                status.html('<span class="badge badge-warning p-1">Skipped</span> ');
+                console.info(response.result.message);
+                break;
+              case 'error':
+                status.html('<span class="badge badge-danger p-1">Error</span> ');
+                console.error(response.result.message);
+                break;
+              case 'ok':
+                status.html('');
+                for (preset in response.result) {
+                  status.append('<span class="badge badge-success p-1">'+preset+'</span> ');
+                  size.append('<span class="badge badge-success p-1">'+response.result[preset]+'</span> ');
+                }
+                break;
+            }
+            $('.progress-bar').css('width', ((index+1)/imagesList.length*100)+'%');
+            $('.counter').html((index+1) + ' / ' + (imagesList.length));
+
+            generateThumbnail(index+1);
+          } else {
+            status.append('<span class="badge badge-danger p-1">Error</span> ');
+            console.error('Something happend :(');
+            finishGeneration(false);
+          }
+        }).fail(function() {
+          status.html('<span class="badge badge-danger p-1">Error</span> ');
+          console.error('Something happend :(');
+          finishGeneration(false);
+        });
+
+      }
+
+      function finishGeneration(finished) {
+        $('.stop').attr('disabled', 'disabled');
+        $('.start').removeAttr('disabled');
+        if (finished) {
+          $('.progress-bar').addClass('bg-success');
+        } else {
+          $('.progress-bar').addClass('bg-danger');
+        }
+      }
+
+    });
+
+  </script>
+
+  </body>
+</html>
